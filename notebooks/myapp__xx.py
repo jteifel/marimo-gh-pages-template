@@ -13,7 +13,10 @@ def _():
 @app.cell
 def _():
     import pandas as pd
-    return (pd,)
+    import polars as pl
+    return (pd, 
+            pl)
+    
 
 
 @app.cell
@@ -91,7 +94,7 @@ def _(apply_filter, food_tabs, get_data, nb_path, pd):
     food_tabs.value
     df = get_data()   # Lade Daten
     filtered_df = apply_filter(df)    # Filtere die zu zeigenden Daten ohne Metainformationen
-    df_mp = pd.read_csv(str(nb_path / "Speiseplan.csv"), sep = ';', encoding='utf8')
+    df_mp = pl.read_csv(str(nb_path / "Speiseplan.csv"), sep = ';', encoding='utf8').to_pandas()
     on_mp_idx = df_mp['idx_rezept'].to_list()
     return df, df_mp, filtered_df, on_mp_idx
 
@@ -116,7 +119,7 @@ def _(
             "Speiseplan": nb_path.joinpath('Speiseplan.csv')
         }
         _file = _base_dataframe_dict[food_tabs.value]
-        _df = pd.read_csv(str(_file), sep = ';', encoding = 'utf8')
+        _df = pl.read_csv(str(_file), sep = ';', encoding = 'utf8').to_pandas()
         return _df
 
 
@@ -329,10 +332,10 @@ def _(mo):
 @app.cell
 def _(nb_path, pd):
     def load_df_shopping_list():
-        return pd.read_csv(str(nb_path.joinpath('Einkaufsliste.csv')), sep=';', encoding = 'utf8')
+        return pl.read_csv(str(nb_path.joinpath('Einkaufsliste.csv')), sep=';', encoding = 'utf8').to_pandas()
 
     def load_df_shopping_helper_list():
-        return pd.read_csv(str(nb_path.joinpath('Einkaufsliste_Helfer.csv')), sep=';', encoding = 'utf8')
+        return pl.read_csv(str(nb_path.joinpath('Einkaufsliste_Helfer.csv')), sep=';', encoding = 'utf8').to_pandas()
 
     df_test = load_df_shopping_helper_list()
     return df_test, load_df_shopping_helper_list, load_df_shopping_list
