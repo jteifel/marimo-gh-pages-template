@@ -13,6 +13,8 @@ def _():
 @app.cell
 def _():
     import pandas as pd
+    import io
+    import requests
     return (pd,)
 
 
@@ -22,7 +24,7 @@ def _(mo):
     get_state_old_df, set_state_old_df = mo.state(None)
     #get_state_old_df_view, set_state_old_df_view = mo.state(None)
     get_state_view_changed, set_state_view_changed  = mo.state(False)
-    nb_path = mo.notebook_location().joinpath('./Rezepte/')
+    nb_path = mo.notebook_location().joinpath('./public/Rezepte/')
     return (
         get_state_old_df,
         get_state_sl,
@@ -91,7 +93,8 @@ def _(apply_filter, food_tabs, get_data, nb_path, pd):
     food_tabs.value
     df = get_data()   # Lade Daten
     filtered_df = apply_filter(df)    # Filtere die zu zeigenden Daten ohne Metainformationen
-    df_mp = pd.read_csv(str(nb_path / "Speiseplan.csv"), sep = ';', encoding='utf8')
+    _s=requests.get(str(nb_path.joinpath('./Speiseplan.csv'))).content
+    df_mp = pd.read_csv(io.StringIO(_s.decode('utf-8')), sep = ';', encoding='utf8')
     on_mp_idx = df_mp['idx_rezept'].to_list()
     return df, df_mp, filtered_df, on_mp_idx
 
@@ -109,14 +112,15 @@ def _(
 
     def get_data():
         _base_dataframe_dict = {
-            "Kochen": nb_path.joinpath('Rezepte.csv'),
-            "Backen": nb_path.joinpath('Rezepte.csv'),
-            "Sonstiges": nb_path.joinpath('Rezepte.csv'),
-            "Einkaufsliste": nb_path.joinpath('Einkaufsliste.csv'),
-            "Speiseplan": nb_path.joinpath('Speiseplan.csv')
+            "Kochen": nb_path.joinpath('./Rezepte.csv'),
+            "Backen": nb_path.joinpath('./Rezepte.csv'),
+            "Sonstiges": nb_path.joinpath('./Rezepte.csv'),
+            "Einkaufsliste": nb_path.joinpath(./'Einkaufsliste.csv'),
+            "Speiseplan": nb_path.joinpath('./Speiseplan.csv')
         }
         _file = _base_dataframe_dict[food_tabs.value]
-        _df = pd.read_csv(_file, sep = ';', encoding = 'utf8')
+        _s=requests.get(str(_file)).content
+        _df = pd.read_csv(io.StringIO(_s.decode('utf-8')), sep = ';', encoding = 'utf8')
         return _df
 
 
@@ -255,7 +259,7 @@ def _(add_meal_to_mp, df, food_tabs, mo, on_mp_idx, table):
             meal_plan_chkbx = mo.ui.checkbox(value = True if df[df['name'] == table.value.name.to_list()[0]].idx.to_list()[0] in on_mp_idx else False, label="Auf Speiseplan", on_change = lambda x: add_meal_to_mp())
             shopping_list_rbttn = mo.ui.run_button(label="Zutaten auf Einkaufsliste")
             show_pdf_chkbx = mo.ui.checkbox(value = False, label="Zeige Rezept pdf")
-            _src = df.loc[table.value.index].iloc[0,df.columns.get_loc('pdf')]
+            _src = nb_path.joinpath(str(df.loc[table.value.index].iloc[0,df.columns.get_loc('pdf')]))
             with open(_src, "rb") as _file:
                 recipe_pdf_view = mo.pdf(src=_file)
     return (
@@ -329,10 +333,12 @@ def _(mo):
 @app.cell
 def _(nb_path, pd):
     def load_df_shopping_list():
-        return pd.read_csv(nb_path.joinpath('Einkaufsliste.csv'), sep=';', encoding = 'utf8')
+        _s=requests.get(str(nb_path.joinpath('./Einkaufsliste.csv'))).content
+        return pd.read_csv(io.StringIO(_s.decode('utf-8')), sep=';', encoding = 'utf8')
 
     def load_df_shopping_helper_list():
-        return pd.read_csv(nb_path.joinpath('Einkaufsliste_Helfer.csv'), sep=';', encoding = 'utf8')
+        _s=requests.get(str(nb_path.joinpath('./Einkaufsliste_Helfer.csv'))).content
+        return pd.read_csv(io.StringIO(_s.decode('utf-8')), sep=';', encoding = 'utf8')
 
     df_test = load_df_shopping_helper_list()
     return df_test, load_df_shopping_helper_list, load_df_shopping_list
