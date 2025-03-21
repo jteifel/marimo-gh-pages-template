@@ -259,9 +259,13 @@ def _(add_meal_to_mp, df, food_tabs, mo, on_mp_idx, table):
             meal_plan_chkbx = mo.ui.checkbox(value = True if df[df['name'] == table.value.name.to_list()[0]].idx.to_list()[0] in on_mp_idx else False, label="Auf Speiseplan", on_change = lambda x: add_meal_to_mp())
             shopping_list_rbttn = mo.ui.run_button(label="Zutaten auf Einkaufsliste")
             show_pdf_chkbx = mo.ui.checkbox(value = False, label="Zeige Rezept pdf")
-            _src = nb_path.joinpath(str(df.loc[table.value.index].iloc[0,df.columns.get_loc('pdf')]))
-            with open(_src, "rb") as _file:
-                recipe_pdf_view = mo.pdf(src=_file)
+            _src = str(nb_path.joinpath(str(df.loc[table.value.index].iloc[0,df.columns.get_loc('pdf')])))
+            response = requests.get(_src)
+            _pdf = io.BytesIO(response.content)
+            recipe_pdf_view = mo.pdf(_pdf)
+
+            #with open(_src, "rb") as _file:
+            #    recipe_pdf_view = mo.pdf(src=_file)
     return (
         meal_plan_chkbx,
         recipe_pdf_view,
