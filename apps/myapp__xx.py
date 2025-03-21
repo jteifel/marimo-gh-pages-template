@@ -115,7 +115,7 @@ def _(
             "Kochen": nb_path.joinpath('./Rezepte.csv'),
             "Backen": nb_path.joinpath('./Rezepte.csv'),
             "Sonstiges": nb_path.joinpath('./Rezepte.csv'),
-            "Einkaufsliste": nb_path.joinpath(./'Einkaufsliste.csv'),
+            "Einkaufsliste": nb_path.joinpath('./Einkaufsliste.csv'),
             "Speiseplan": nb_path.joinpath('./Speiseplan.csv')
         }
         _file = _base_dataframe_dict[food_tabs.value]
