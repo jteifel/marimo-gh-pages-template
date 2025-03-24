@@ -13,19 +13,32 @@ def _():
 @app.cell
 def _():
     import pandas as pd
-    import io
-    import requests
     return (pd,)
 
 
 @app.cell
-def _(mo):
+def _():
+    import duckdb as dd
+    return (dd,)
+
+
+@app.cell
+def _():
+    import io
+    import requests
+    return io, requests
+
+
+@app.cell
+def _(dd, mo):
     get_state_sl, set_state_sl = mo.state(-1)
     get_state_old_df, set_state_old_df = mo.state(None)
     #get_state_old_df_view, set_state_old_df_view = mo.state(None)
     get_state_view_changed, set_state_view_changed  = mo.state(False)
-    nb_path = mo.notebook_location().joinpath('./public/Rezepte/')
+    nb_path = mo.notebook_location().joinpath('./Rezepte/')
+    con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
     return (
+        con,
         get_state_old_df,
         get_state_sl,
         get_state_view_changed,
@@ -89,12 +102,12 @@ def _(mo):
 
 
 @app.cell
-def _(apply_filter, food_tabs, get_data, nb_path, pd):
+def _(apply_filter, con, food_tabs, get_data):
     food_tabs.value
     df = get_data()   # Lade Daten
     filtered_df = apply_filter(df)    # Filtere die zu zeigenden Daten ohne Metainformationen
-    _s=requests.get(str(nb_path.joinpath('./Speiseplan.csv'))).content
-    df_mp = pd.read_csv(io.StringIO(_s.decode('utf-8')), sep = ';', encoding='utf8')
+    df_mp = con.sql('SELECT * FROM meal_plan').df()#pd.read_csv(str(nb_path / "Speiseplan.csv"), sep = ';', encoding='utf8')
+    #con.close()
     on_mp_idx = df_mp['idx_rezept'].to_list()
     return df, df_mp, filtered_df, on_mp_idx
 
@@ -102,25 +115,24 @@ def _(apply_filter, food_tabs, get_data, nb_path, pd):
 @app.cell
 def _(
     baking_dropdown_dict,
+    con,
     cooking_dropdown_dict,
     food_tabs,
-    nb_path,
-    pd,
     set_state_old_df,
 ):
     ##### Lade Daten aus csv-Dateien ##############
 
     def get_data():
         _base_dataframe_dict = {
-            "Kochen": nb_path.joinpath('./Rezepte.csv'),
-            "Backen": nb_path.joinpath('./Rezepte.csv'),
-            "Sonstiges": nb_path.joinpath('./Rezepte.csv'),
-            "Einkaufsliste": nb_path.joinpath('./Einkaufsliste.csv'),
-            "Speiseplan": nb_path.joinpath('./Speiseplan.csv')
+            "Kochen": 'recipe', #nb_path.joinpath('Rezepte.csv'),
+            "Backen": 'recipe', #nb_path.joinpath('Rezepte.csv'),
+            "Sonstiges": 'recipe', #nb_path.joinpath('Rezepte.csv'),
+            "Einkaufsliste": 'shopping_list', #nb_path.joinpath('Einkaufsliste.csv'),
+            "Speiseplan": 'meal_plan' #nb_path.joinpath('Speiseplan.csv')
         }
-        _file = _base_dataframe_dict[food_tabs.value]
-        _s=requests.get(str(_file)).content
-        _df = pd.read_csv(io.StringIO(_s.decode('utf-8')), sep = ';', encoding = 'utf8')
+        #_file = _base_dataframe_dict[food_tabs.value]
+
+        _df = con.sql('SELECT * FROM '+ _base_dataframe_dict[food_tabs.value]).df()#pd.read_csv(_file, sep = ';', encoding = 'utf8')
         return _df
 
 
@@ -252,7 +264,7 @@ def _(mo):
 
 
 @app.cell
-def _(add_meal_to_mp, df, food_tabs, mo, on_mp_idx, table):
+def _(add_meal_to_mp, df, food_tabs, mo, nb_path, on_mp_idx, table):
     ############## Definiere Header für Rezept-Tabellen ###################
     if food_tabs.value in ["Kochen", "Backen", "Sonstiges"]:  
         if not len(table.value) == 0:
@@ -260,12 +272,12 @@ def _(add_meal_to_mp, df, food_tabs, mo, on_mp_idx, table):
             shopping_list_rbttn = mo.ui.run_button(label="Zutaten auf Einkaufsliste")
             show_pdf_chkbx = mo.ui.checkbox(value = False, label="Zeige Rezept pdf")
             _src = str(nb_path.joinpath(str(df.loc[table.value.index].iloc[0,df.columns.get_loc('pdf')])))
-            response = requests.get(_src)
-            _pdf = io.BytesIO(response.content)
-            recipe_pdf_view = mo.pdf(_pdf)
+            with open(_src, "rb") as _file:
+                recipe_pdf_view = mo.pdf(src=_file)
 
-            #with open(_src, "rb") as _file:
-            #    recipe_pdf_view = mo.pdf(src=_file)
+            #response = requests.get(_src)
+            #_pdf = io.BytesIO(response.content)
+            #recipe_pdf_view = mo.pdf(_pdf)
     return (
         meal_plan_chkbx,
         recipe_pdf_view,
@@ -335,21 +347,21 @@ def _(mo):
 
 
 @app.cell
-def _(nb_path, pd):
+def _(con):
     def load_df_shopping_list():
-        _s=requests.get(str(nb_path.joinpath('./Einkaufsliste.csv'))).content
-        return pd.read_csv(io.StringIO(_s.decode('utf-8')), sep=';', encoding = 'utf8')
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        return con.sql('SELECT * FROM shopping_list').df() #pd.read_csv(nb_path.joinpath('Einkaufsliste.csv'), sep=';', encoding = 'utf8')
 
     def load_df_shopping_helper_list():
-        _s=requests.get(str(nb_path.joinpath('./Einkaufsliste_Helfer.csv'))).content
-        return pd.read_csv(io.StringIO(_s.decode('utf-8')), sep=';', encoding = 'utf8')
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        return con.sql('SELECT * FROM sl_helper').df() #pd.read_csv(nb_path.joinpath('Einkaufsliste_Helfer.csv'), sep=';', encoding = 'utf8')
 
     df_test = load_df_shopping_helper_list()
     return df_test, load_df_shopping_helper_list, load_df_shopping_list
 
 
 @app.cell
-def _(load_df_shopping_list, nb_path, prune_ing_table):
+def _(con, load_df_shopping_list, prune_ing_table):
     #### Lade Einkaufsliste und fasse gleiche Artikel zusammen #####
     #### Die neue Einkaufsliste wird dann auch gespeichert #######
     #mo.stop(len(table.value)==0)
@@ -365,7 +377,22 @@ def _(load_df_shopping_list, nb_path, prune_ing_table):
 
         ##### save new shopping list ####
         #print('save new shopping list...')
-        df_shopping_list.to_csv(nb_path.joinpath('Einkaufsliste.csv'), sep = ';', index = False, encoding = 'utf8')
+        #df_shopping_list.to_csv(nb_path.joinpath('Einkaufsliste.csv'), sep = ';', index = False, encoding = 'utf8')
+        # Use StringIO to simulate a CSV file in memory
+        #csv_buffer = io.StringIO()
+        #_sl_csv = df_shopping_list.to_csv(csv_buffer, sep = ';', index = False, encoding = 'utf8')
+        #csv_buffer.seek(0)  # Reset the buffer to the beginning
+        #_sl_csv = df_shopping_list.to_csv(sep = ';', index = False, encoding = 'utf8')
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        con.register('tmp_table', df_shopping_list)
+
+        # Replace the original table with the new one
+        con.execute('''
+            CREATE OR REPLACE TABLE shopping_list AS 
+            SELECT * FROM tmp_table; ''')
+
+        #con.close()
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
     return (add_ingredients_to_sl,)
 
 
@@ -406,7 +433,7 @@ def _(mo):
 
 
 @app.cell
-def _(df, nb_path, on_mp_idx, pd, table):
+def _(con, df, on_mp_idx, pd, table):
     def add_meal_to_mp():
         _meal_name = table.value.name
         _meal_idx = df[df['name'] == table.value.name.to_list()[0]].idx.to_list()[0]
@@ -418,7 +445,14 @@ def _(df, nb_path, on_mp_idx, pd, table):
             df.loc[_meal_idx,'on_shopping_list'] = True
         _on_mp_names = df.loc[on_mp_idx].name.to_list()
         _new_mp = {'name': _on_mp_names, 'idx_rezept': on_mp_idx}
-        pd.DataFrame.from_dict(_new_mp).to_csv(nb_path.joinpath('Speiseplan.csv'), index = False, sep = ';', encoding='utf8')
+        #### update database
+        _new_mp_df = pd.DataFrame.from_dict(_new_mp)#.to_csv(nb_path.joinpath('Speiseplan.csv'), index = False, sep = ';', encoding='utf8')
+    
+        con.register('tmp_table', _new_mp_df)
+        # Replace the original table with the new one
+        con.execute('''
+            CREATE OR REPLACE TABLE meal_plan AS 
+            SELECT * FROM tmp_table; ''')
     return (add_meal_to_mp,)
 
 
@@ -572,10 +606,25 @@ def _(mo):
 
 
 @app.cell
-def _(get_state_old_df, mo, nb_path):
+def _(mo, save_act_sl):
     ### Definition für Speichern der neuen Werte
-    update_button = mo.ui.run_button(label = 'update files', on_change = lambda x: get_state_old_df().to_csv(nb_path.joinpath('Einkaufsliste.csv'), sep = ';', index = False, encoding = 'utf8'))
+    update_button = mo.ui.run_button(label = 'update files', on_change = lambda x: save_act_sl())
     return (update_button,)
+
+
+@app.cell
+def _(con, get_state_old_df):
+    def save_act_sl():
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        con.register('tmp_table', get_state_old_df())
+
+        # Replace the original table with the new one
+        con.execute('''
+            CREATE OR REPLACE TABLE shopping_list AS 
+            SELECT * FROM tmp_table; ''')
+        #con.close()
+        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+    return (save_act_sl,)
 
 
 @app.cell
@@ -603,6 +652,12 @@ def _(
     food_tabs.value
     sl_add_submit_button = mo.ui.run_button(label = 'add', on_change = lambda x: add_item_to_sl(sl_add_item.value, sl_add_amount.value, sl_add_unit.value, sl_add_rank.value))
     return (sl_add_submit_button,)
+
+
+@app.cell
+def _(get_state_old_df):
+    get_state_old_df()
+    return
 
 
 @app.cell
