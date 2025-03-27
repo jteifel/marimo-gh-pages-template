@@ -32,28 +32,28 @@ def _():
 
 @app.cell
 def _(mo):
-    p_file = mo.ui.file_browser(multiple = False)
+    p_file = mo.ui.file(kind="button")
     return (p_file,)
 
 
 @app.cell
 def _(mo, p_file):
     if len(p_file.value) == 0:
-        show_file_select = mo.vstack([p_file])
+        show_file_upload = mo.vstack([p_file])
     else:
-        show_file_select = None
-    return (show_file_select,)
+        show_file_upload = None
+    return (show_file_upload,)
 
 
 @app.cell
-def _(show_file_select):
-    show_file_select
+def _(show_file_upload):
+    show_file_upload
     return
 
 
 @app.cell
 def _(p_file):
-    with open(p_file.value[0].id, "rb") as file1:
+    with open(p_file.value[0].name, "rb") as file1:
         file_content = file1.readline()
 
     with open('./testing_2.txt', "rb") as file2:
@@ -82,18 +82,17 @@ def _(MongoClient, pw):
 
 @app.cell
 def _(pd):
-    from bson import json_util, ObjectId
+    #from bson import json_util, ObjectId
     #from pandas.io.json import json_normalize
     import json
 
     def mongo_to_dataframe(mongo_data):
+            #sanitized = json.loads(json_util.dumps(mongo_data))
+            #normalized = pd.json_normalize(sanitized)
+            df = pd.DataFrame(list(mongo_data))
 
-            sanitized = json.loads(json_util.dumps(mongo_data))
-            normalized = pd.json_normalize(sanitized)
-            df = pd.DataFrame(normalized)
-
-            return df.drop('_id.$oid', axis=1)
-    return ObjectId, json, json_util, mongo_to_dataframe
+            return df.drop('_id', axis=1)
+    return json, mongo_to_dataframe
 
 
 @app.cell
