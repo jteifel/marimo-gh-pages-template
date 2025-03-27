@@ -18,27 +18,92 @@ def _():
 
 @app.cell
 def _():
-    import duckdb as dd
-    return (dd,)
+    from pymongo import MongoClient
+    return (MongoClient,)
 
 
 @app.cell
 def _():
     import io
     import requests
-    return io, requests
+    from cryptography.fernet import Fernet
+    return Fernet, io, requests
 
 
 @app.cell
-def _(dd, mo):
+def _(mo):
+    p_file = mo.ui.file_browser(multiple = False)
+    return (p_file,)
+
+
+@app.cell
+def _(mo, p_file):
+    if len(p_file.value) == 0:
+        show_file_select = mo.vstack([p_file])
+    else:
+        show_file_select = None
+    return (show_file_select,)
+
+
+@app.cell
+def _(show_file_select):
+    show_file_select
+    return
+
+
+@app.cell
+def _(p_file):
+    with open(p_file.value[0].id, "rb") as file1:
+        file_content = file1.readline()
+
+    with open('./testing_2.txt', "rb") as file2:
+        file_content_2 = file2.readline()
+    return file1, file2, file_content, file_content_2
+
+
+@app.cell
+def _(Fernet, file_content, file_content_2):
+    f = Fernet(file_content)
+    pw = f.decrypt(file_content_2.decode()).decode()
+    return f, pw
+
+
+@app.cell
+def _(MongoClient, pw):
+    _CONNECTION_STRING = 'mongodb+srv://jteifel:' + pw + '@cluster101010.pjft0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster101010'
+
+    # Create a connection using MongoClient. You can import MongoClient or use pymongo.MongoClient
+    _client = MongoClient(_CONNECTION_STRING)
+
+    # Create the database for our example (we will use the same database throughout the tutorial
+    act_client = _client['my_food_app']
+    return (act_client,)
+
+
+@app.cell
+def _(pd):
+    from bson import json_util, ObjectId
+    #from pandas.io.json import json_normalize
+    import json
+
+    def mongo_to_dataframe(mongo_data):
+
+            sanitized = json.loads(json_util.dumps(mongo_data))
+            normalized = pd.json_normalize(sanitized)
+            df = pd.DataFrame(normalized)
+
+            return df.drop('_id.$oid', axis=1)
+    return ObjectId, json, json_util, mongo_to_dataframe
+
+
+@app.cell
+def _(mo):
     get_state_sl, set_state_sl = mo.state(-1)
     get_state_old_df, set_state_old_df = mo.state(None)
     #get_state_old_df_view, set_state_old_df_view = mo.state(None)
     get_state_view_changed, set_state_view_changed  = mo.state(False)
     nb_path = mo.notebook_location().joinpath('./Rezepte/')
-    con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
     return (
-        con,
         get_state_old_df,
         get_state_sl,
         get_state_view_changed,
@@ -102,37 +167,38 @@ def _(mo):
 
 
 @app.cell
-def _(apply_filter, con, food_tabs, get_data):
+def _(act_client, apply_filter, food_tabs, get_data, mongo_to_dataframe):
     food_tabs.value
     df = get_data()   # Lade Daten
     filtered_df = apply_filter(df)    # Filtere die zu zeigenden Daten ohne Metainformationen
-    df_mp = con.sql('SELECT * FROM meal_plan').df()#pd.read_csv(str(nb_path / "Speiseplan.csv"), sep = ';', encoding='utf8')
-    #con.close()
+    collection_name = act_client["meal_plan"]
+    df_mp = mongo_to_dataframe(collection_name.find())
     on_mp_idx = df_mp['idx_rezept'].to_list()
-    return df, df_mp, filtered_df, on_mp_idx
+    return collection_name, df, df_mp, filtered_df, on_mp_idx
 
 
 @app.cell
 def _(
+    act_client,
     baking_dropdown_dict,
-    con,
     cooking_dropdown_dict,
     food_tabs,
+    mongo_to_dataframe,
     set_state_old_df,
 ):
     ##### Lade Daten aus csv-Dateien ##############
 
     def get_data():
         _base_dataframe_dict = {
-            "Kochen": 'recipe', #nb_path.joinpath('Rezepte.csv'),
-            "Backen": 'recipe', #nb_path.joinpath('Rezepte.csv'),
-            "Sonstiges": 'recipe', #nb_path.joinpath('Rezepte.csv'),
+            "Kochen": 'recipes', #nb_path.joinpath('Rezepte.csv'),
+            "Backen": 'recipes', #nb_path.joinpath('Rezepte.csv'),
+            "Sonstiges": 'recipes', #nb_path.joinpath('Rezepte.csv'),
             "Einkaufsliste": 'shopping_list', #nb_path.joinpath('Einkaufsliste.csv'),
             "Speiseplan": 'meal_plan' #nb_path.joinpath('Speiseplan.csv')
         }
         #_file = _base_dataframe_dict[food_tabs.value]
-
-        _df = con.sql('SELECT * FROM '+ _base_dataframe_dict[food_tabs.value]).df()#pd.read_csv(_file, sep = ';', encoding = 'utf8')
+        _collection_name = act_client[_base_dataframe_dict[food_tabs.value]]
+        _df = mongo_to_dataframe(_collection_name.find())
         return _df
 
 
@@ -347,23 +413,25 @@ def _(mo):
 
 
 @app.cell
-def _(con):
+def _(act_client, mongo_to_dataframe):
     def load_df_shopping_list():
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
-        return con.sql('SELECT * FROM shopping_list').df() #pd.read_csv(nb_path.joinpath('Einkaufsliste.csv'), sep=';', encoding = 'utf8')
+        _collection_name = act_client['shopping_list']
+        _df = mongo_to_dataframe(_collection_name.find())
+        return _df
 
     def load_df_shopping_helper_list():
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
-        return con.sql('SELECT * FROM sl_helper').df() #pd.read_csv(nb_path.joinpath('Einkaufsliste_Helfer.csv'), sep=';', encoding = 'utf8')
+        _collection_name = act_client['sl_helper']
+        _df = mongo_to_dataframe(_collection_name.find())
 
-    df_test = load_df_shopping_helper_list()
-    return df_test, load_df_shopping_helper_list, load_df_shopping_list
+        return _df
+    return load_df_shopping_helper_list, load_df_shopping_list
 
 
 @app.cell
-def _(con, load_df_shopping_list, prune_ing_table):
+def _(act_client, load_df_shopping_list, prune_ing_table):
     #### Lade Einkaufsliste und fasse gleiche Artikel zusammen #####
     #### Die neue Einkaufsliste wird dann auch gespeichert #######
+    ##### Wird aufgerufen, wenn ein Rezept auf den Speiseplan gesetzt wird und Zutaten automatisch zugefügt werden ########
     #mo.stop(len(table.value)==0)
     def add_ingredients_to_sl(_ings):
         #print(_ings)
@@ -374,25 +442,9 @@ def _(con, load_df_shopping_list, prune_ing_table):
             df_shopping_list.loc[i+_last_elem] = _to_add
         df_shopping_list = df_shopping_list.groupby(['artikel', 'einheit'])[['menge', 'rang']].aggregate({'menge': 'sum', 'rang': 'median'}).reset_index()
         df_shopping_list = df_shopping_list[['artikel', 'menge', 'einheit', 'rang']]
-
-        ##### save new shopping list ####
-        #print('save new shopping list...')
-        #df_shopping_list.to_csv(nb_path.joinpath('Einkaufsliste.csv'), sep = ';', index = False, encoding = 'utf8')
-        # Use StringIO to simulate a CSV file in memory
-        #csv_buffer = io.StringIO()
-        #_sl_csv = df_shopping_list.to_csv(csv_buffer, sep = ';', index = False, encoding = 'utf8')
-        #csv_buffer.seek(0)  # Reset the buffer to the beginning
-        #_sl_csv = df_shopping_list.to_csv(sep = ';', index = False, encoding = 'utf8')
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
-        con.register('tmp_table', df_shopping_list)
-
-        # Replace the original table with the new one
-        con.execute('''
-            CREATE OR REPLACE TABLE shopping_list AS 
-            SELECT * FROM tmp_table; ''')
-
-        #con.close()
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        _collection_name = act_client['shopping_list']
+        _collection_name.delete_many({'artikel': {'$regex': '' }}) # löschen aller Einträge
+        _collection_name.insert_many(df_shopping_list.to_dict('records'))   # einfügen des gesamten DataFrames df_shopping_list
     return (add_ingredients_to_sl,)
 
 
@@ -433,26 +485,22 @@ def _(mo):
 
 
 @app.cell
-def _(con, df, on_mp_idx, pd, table):
+def _(act_client, df, on_mp_idx, table):
     def add_meal_to_mp():
-        _meal_name = table.value.name
+        _meal_name = table.value.name.to_list()[0]
         _meal_idx = df[df['name'] == table.value.name.to_list()[0]].idx.to_list()[0]
         if _meal_idx in on_mp_idx:   # Essen war auf Speiseplan - und soll wohl folglich runter davon
             on_mp_idx.remove(_meal_idx)
             df.loc[_meal_idx, 'on_shopping_list'] = False
+            act_client['meal_plan'].delete_one({'idx_rezept': _meal_idx})  # lösche Eintrag im Speiseplan aus der Datenbank
         else:    # Essen soll auf Speiseplan gesetzt werden
             on_mp_idx.append(_meal_idx)
             df.loc[_meal_idx,'on_shopping_list'] = True
-        _on_mp_names = df.loc[on_mp_idx].name.to_list()
-        _new_mp = {'name': _on_mp_names, 'idx_rezept': on_mp_idx}
-        #### update database
-        _new_mp_df = pd.DataFrame.from_dict(_new_mp)#.to_csv(nb_path.joinpath('Speiseplan.csv'), index = False, sep = ';', encoding='utf8')
-    
-        con.register('tmp_table', _new_mp_df)
-        # Replace the original table with the new one
-        con.execute('''
-            CREATE OR REPLACE TABLE meal_plan AS 
-            SELECT * FROM tmp_table; ''')
+            print(_meal_name)
+            print(_meal_idx)
+            act_client['meal_plan'].insert_one({'name': _meal_name, 'idx_rezept': _meal_idx})
+        #_on_mp_names = df.loc[on_mp_idx].name.to_list()
+        #_new_mp = {'name': _on_mp_names, 'idx_rezept': on_mp_idx}
     return (add_meal_to_mp,)
 
 
@@ -613,17 +661,11 @@ def _(mo, save_act_sl):
 
 
 @app.cell
-def _(con, get_state_old_df):
+def _(act_client, get_state_old_df):
     def save_act_sl():
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
-        con.register('tmp_table', get_state_old_df())
-
-        # Replace the original table with the new one
-        con.execute('''
-            CREATE OR REPLACE TABLE shopping_list AS 
-            SELECT * FROM tmp_table; ''')
-        #con.close()
-        #con = dd.connect(str(nb_path.joinpath('./haushalt_essen.db')))
+        _collection_name = act_client['shopping_list']
+        _collection_name.delete_many({'artikel': {'$regex': '' }}) # löschen aller Einträge
+        _collection_name.insert_many(get_state_old_df().to_dict('records'))   # einfügen des gesamten DataFrames df_shopping_list
     return (save_act_sl,)
 
 
@@ -652,12 +694,6 @@ def _(
     food_tabs.value
     sl_add_submit_button = mo.ui.run_button(label = 'add', on_change = lambda x: add_item_to_sl(sl_add_item.value, sl_add_amount.value, sl_add_unit.value, sl_add_rank.value))
     return (sl_add_submit_button,)
-
-
-@app.cell
-def _(get_state_old_df):
-    get_state_old_df()
-    return
 
 
 @app.cell
